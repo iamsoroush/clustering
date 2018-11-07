@@ -242,12 +242,13 @@ class ROGraph:
     def _generate_normalized_pw_distances(self, ordered_distances, order_lists):
         n_samples = len(ordered_distances)
         combs = itertools.combinations([i for i in range(n_samples)], 2)
-        pw_distances = np.zeros(n_samples, n_samples)
+        pw_distances = np.zeros((n_samples, n_samples))
         for ind1, ind2 in combs:
             order_list_1, order_list_2 = order_lists[ind1], order_lists[ind2]
             pw_dist = self._calc_pw_dist(ind1, ind2, order_list_1, order_list_2, ordered_distances)
-            pw_distances[ind1, ind2] = 1 / pw_dist
+            pw_distances[ind1, ind2] = pw_dist
         pw_distances = pw_distances / pw_distances.max()
+        pw_distances = pw_distances + pw_distances.T
         return pw_distances
 
     def _generate_adjacency_mat(self, pw_distances):
@@ -266,8 +267,8 @@ class ROGraph:
         pw_dist = 0.0
         if np.any(order_list_a == order_list_b):
             order_b_in_a, order_a_in_b = self._calc_orders(ind_a, ind_b, order_list_a, order_list_b)
-            d_m_ab = self._calc_dm()
-            d_m_ba = self._calc_dm()
+            d_m_ab = self._calc_dm(ind_a, ind_b, order_list_a, order_list_b, order_b_in_a, order_a_in_b)
+            d_m_ba = self._calc_dm(ind_b, ind_a, order_list_b, order_list_a, order_a_in_b, order_b_in_a)
             pw_dist = (d_m_ab + d_m_ba) / min(order_a_in_b, order_b_in_a)
         return pw_dist
 
