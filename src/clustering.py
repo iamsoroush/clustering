@@ -13,13 +13,14 @@ class ROCWClustering:
 
     """
 
-    def __init__(self, k=50, metric='euclidean', n_iteration=5):
+    def __init__(self, k=50, metric='euclidean', n_iteration=5, algorithm='ball_tree'):
         self.k = k
         self.metric = metric
         self.n_iteration = n_iteration
+        self.knn_algorithm = algorithm
 
     def fit_predict(self, X):
-        graph = ROGraph(self.k, self.metric)
+        graph = ROGraph(self.k, self.metric, algorithm=self.knn_algorithm)
         adjacency_mat = graph.generate_graph(X)
         clusterer = ChineseWhispersClustering(self.n_iteration)
         labels = clusterer.fit_predict(adjacency_mat)

@@ -215,9 +215,10 @@ class ChineseWhispersClustering:
 
 
 class ROGraph:
-    def __init__(self, k, metric):
+    def __init__(self, k, metric, algorithm):
         self.k = k
         self.metric = metric
+        self.knn_algorithm = algorithm
         self.adjacency_mat_ = None
 
     @property
@@ -235,7 +236,7 @@ class ROGraph:
             for each data point.
         """
 
-        nbrs = NearestNeighbors(n_neighbors=self.k, algorithm='ball_tree', metric=self.metric).fit(X)
+        nbrs = NearestNeighbors(n_neighbors=self.k, algorithm=self.knn_algorithm, metric=self.metric).fit(X)
         ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
         return ordered_absolute_distances, order_lists
 
