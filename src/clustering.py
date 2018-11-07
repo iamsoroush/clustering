@@ -13,7 +13,7 @@ class ROCWClustering:
 
     """
 
-    def __init__(self, k=50, metric='cosine', n_iteration=5):
+    def __init__(self, k=50, metric='euclidean', n_iteration=5):
         self.k = k
         self.metric = metric
         self.n_iteration = n_iteration
@@ -34,8 +34,8 @@ class RankOrderClustering:
     Create an instance, and call the 'fit_predict' method.
     """
 
-    def __init__(self, ranking_metric='euclidean', threshold=10, k=20):
-        self.ranking_metric = ranking_metric
+    def __init__(self, metric='euclidean', threshold=10, k=20):
+        self.ranking_metric = metric
         self.threshold = threshold
         self.k = k
 
@@ -177,7 +177,7 @@ class ApproximateRankOrderClustering:
     Source paper: https://arxiv.org/abs/1604.00989
     """
 
-    def __init__(self, k=50, threshold=0.1, absolute_distance_metric='euclidean'):
+    def __init__(self, k=50, threshold=0.1, metric='euclidean'):
         """Init an instance.
 
         Parameters
@@ -192,7 +192,7 @@ class ApproximateRankOrderClustering:
 
         self.k = k
         self.threshold = threshold
-        self.absolute_distance_metric = absolute_distance_metric
+        self.absolute_distance_metric = metric
 
     def fit_predict(self, X):
         """Finds clusters within given data and returns predicted labels.
