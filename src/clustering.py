@@ -1,7 +1,23 @@
+# -*- coding: utf-8 -*-
+"""Randk-Order-Based clustering algorithm.
+
+This file contains classes that are implementations of two clustering algorithms
+ proposed for face clustering problem.
+
+I combine Approximate Rank-Order algorithm and Chinese Whispers algorithm
+ in ROCWClustering class.
+"""
+# Author: Soroush Moazed <soroush.moazed@gmail.com>
+
+from __future__ import division
+from __future__ import print_function
+
+import itertools
+
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import pairwise_distances
-import itertools
+
 from helpers import Cluster, ClusterContainer, ChineseWhispersClustering, ROGraph
 
 

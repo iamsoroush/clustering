@@ -1,5 +1,14 @@
-import numpy as np
+# -*- coding: utf-8 -*-
+"""Helper classes for algorithms implemented in clustering.py
+"""
+# Author: Soroush Moazed <soroush.moazed@gmail.com>
+
+from __future__ import division
+from __future__ import print_function
+
 import itertools
+
+import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 
