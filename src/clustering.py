@@ -5,7 +5,53 @@ import itertools
 from helpers import Cluster, ClusterContainer, ChineseWhispersClustering, ROGraph
 
 
-class ROCWClustering:
+class BaseClustering:
+    def __init__(self):
+        pass
+
+    def fit_predict(self, X):
+        pass
+
+    def score(self, X, y_true):
+        y_pred = self.fit_predict(X)
+        pairwise_precision = self._calc_pw_precision(y_pred, y_true)
+        pairwise_recall = self._calc_pw_recall(y_pred, y_true)
+        pairwise_f_measure = 2 * (pairwise_precision * pairwise_recall)\
+            / (pairwise_precision + pairwise_recall)
+        return pairwise_f_measure, pairwise_precision, pairwise_recall
+
+    @staticmethod
+    def _calc_pw_precision(y_pred, y_true):
+        unique_clusters = np.unique(y_pred)
+        n_pairs = 0
+        n_same_class_pairs = 0
+        for cluster in unique_clusters:
+            sample_indices = np.where(y_pred == cluster)[0]
+            combs = np.array(list(itertools.combinations(sample_indices, 2)))
+            combs_classes = y_true[combs]
+            same_class_pairs = np.where(combs_classes[:, 0] == combs_classes[:, 1])[0]
+            n_pairs += len(combs)
+            n_same_class_pairs += len(same_class_pairs)
+        pw_precision = n_same_class_pairs / n_pairs
+        return pw_precision
+
+    @staticmethod
+    def _calc_pw_recall(y_pred, y_true):
+        unique_classes = np.unique(y_true)
+        n_pairs = 0
+        n_same_cluster_pairs = 0
+        for clss in unique_classes:
+            sample_indices = np.where(y_true == clss)[0]
+            combs = np.array(list(itertools.combinations(sample_indices, 2)))
+            combs_clusters = y_pred[combs]
+            same_cluster_pairs = np.where(combs_clusters[:, 0] == combs_clusters[:, 1])[0]
+            n_pairs += len(combs)
+            n_same_cluster_pairs += len(same_cluster_pairs)
+        pw_recall = n_same_cluster_pairs / n_pairs
+        return pw_recall
+
+
+class ROCWClustering(BaseClustering):
     """Approximated rank-order clustering implemented using Chinese Whispers algorithm.
 
     Using rank-order distances generate a graph, and feed this graph to ChineseWhispers
@@ -13,7 +59,7 @@ class ROCWClustering:
 
     """
 
-    def __init__(self, k=50, metric='euclidean', n_iteration=5, algorithm='ball_tree'):
+    def __init__(self, k=20, metric='euclidean', n_iteration=5, algorithm='ball_tree'):
         self.k = k
         self.metric = metric
         self.n_iteration = n_iteration
@@ -27,7 +73,7 @@ class ROCWClustering:
         return labels
 
 
-class RankOrderClustering:
+class RankOrderClustering(BaseClustering):
     """Class for rank-order clustering algorithm.
 
     Source paper:  DOI: 10.1109/CVPR.2011.5995680
@@ -172,7 +218,7 @@ class RankOrderClustering:
         return b_in_a, d
 
 
-class ApproximateRankOrderClustering:
+class ApproximateRankOrderClustering(BaseClustering):
     """Approximate rank-order clustering implementation.
 
     Source paper: https://arxiv.org/abs/1604.00989
