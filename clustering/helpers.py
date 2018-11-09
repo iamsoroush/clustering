@@ -114,7 +114,7 @@ class Cluster:
         Give data index in original data array as member, e.g. : [5, 6] means 5th and 6th data point.
     """
     def __init__(self, label, members):
-        self.label = label
+        self.label = int(label)
         self.members = members
 
     def add_members(self, members):

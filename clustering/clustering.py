@@ -43,7 +43,9 @@ class BaseClustering:
         n_same_class_pairs = 0
         for cluster in unique_clusters:
             sample_indices = np.where(y_pred == cluster)[0]
-            combs = np.array(list(itertools.combinations(sample_indices, 2)))
+            combs = np.array(list(itertools.combinations(sample_indices, 2)), dtype=np.int64)
+            if not np.any(combs):
+                continue
             combs_classes = y_true[combs]
             same_class_pairs = np.where(combs_classes[:, 0] == combs_classes[:, 1])[0]
             n_pairs += len(combs)
@@ -58,7 +60,9 @@ class BaseClustering:
         n_same_cluster_pairs = 0
         for clss in unique_classes:
             sample_indices = np.where(y_true == clss)[0]
-            combs = np.array(list(itertools.combinations(sample_indices, 2)))
+            combs = np.array(list(itertools.combinations(sample_indices, 2)), dtype=np.int64)
+            if not np.any(combs):
+                continue
             combs_clusters = y_pred[combs]
             same_cluster_pairs = np.where(combs_clusters[:, 0] == combs_clusters[:, 1])[0]
             n_pairs += len(combs)
@@ -116,9 +120,8 @@ class RankOrderClustering(BaseClustering):
         n_samples = X.shape[0]
 
         # Generate order list for every data point
-        nbrs = NearestNeighbors(n_neighbors=n_samples, algorithm='ball_tree',
-                                metric=self.ranking_metric).fit(X)
-        ordered_absolute_distances, sample_level_order_lists = nbrs.kneighbors(X)
+        ordered_absolute_distances, sample_level_order_lists = self._get_knns(X, n_samples,
+                                                                              self.ranking_metric)
         absolute_distances = pairwise_distances(X, metric=self.ranking_metric)
 
         # Initialize clusters, each data point will be a separate cluster
@@ -145,28 +148,39 @@ class RankOrderClustering(BaseClustering):
                 dist1 = clusters.cluster_level_absolut_distances[cluster_ind_1]
                 dist2 = clusters.cluster_level_absolut_distances[cluster_ind_2]
 
-                d_r, d_n = self.calc_dr_dn(clusters.clusters[cluster_ind_1],
-                                           clusters.clusters[cluster_ind_2],
-                                           dist1, dist2,
-                                           ordered_absolute_distances,
-                                           self.k)
+                d_r, d_n = self._calc_dr_dn(clusters.clusters[cluster_ind_1],
+                                            clusters.clusters[cluster_ind_2],
+                                            dist1, dist2,
+                                            ordered_absolute_distances,
+                                            self.k)
                 if (d_r < self.threshold) and (d_n < 1):
                     candidate_pairs.append((cluster_ind_1, cluster_ind_2))
             if candidate_pairs:
-                clusters_to_merge = self.find_clusters_to_merge(candidate_pairs)
+                clusters_to_merge = self._find_clusters_to_merge(candidate_pairs)
 
                 # Merge clusters and update cluster-level absolute distances
                 clusters.merge_clusters(clusters_to_merge)
             else:
                 break
 
-        labels = np.zeros(X.shape[0])
+        labels = np.zeros(n_samples, dtype=np.int64)
         for cluster in clusters:
             indices = cluster.members
             labels[indices] = cluster.label
         return labels
 
-    def find_clusters_to_merge(self, candidate_pairs):
+    @staticmethod
+    def _get_knns(X, k, metric):
+        """Generates order lists and absolute distances of k-nearest-neighbors
+            for each data point.
+        """
+
+        nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree',
+                                metric=metric).fit(X)
+        ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
+        return ordered_absolute_distances, order_lists
+
+    def _find_clusters_to_merge(self, candidate_pairs):
         clusters_to_merge = []
         pairs = candidate_pairs.copy()
         while pairs:
@@ -190,7 +204,7 @@ class RankOrderClustering(BaseClustering):
             clusters_to_merge.append(list(set(new_cluster)))
         return clusters_to_merge
 
-    def calc_dr_dn(self, c1, c2, dist1, dist2, ordered_absolute_distances, k):
+    def _calc_dr_dn(self, c1, c2, dist1, dist2, ordered_absolute_distances, k):
         """Calculate two distance metrics in cluster-level.
 
         Parameters
@@ -205,16 +219,16 @@ class RankOrderClustering(BaseClustering):
 
         ol1 = np.argsort(dist1)
         ol2 = np.argsort(dist2)
-        o1, d1 = self.calc_asym_dist(c1.label, c2.label, ol1, ol2)
-        o2, d2 = self.calc_asym_dist(c2.label, c1.label, ol2, ol1)
+        o1, d1 = self._calc_asym_dist(c1.label, c2.label, ol1, ol2)
+        o2, d2 = self._calc_asym_dist(c2.label, c1.label, ol2, ol1)
         d_r = (d1 + d2) / min(o1, o2)
 
-        phi = self.compute_phi(c1, c2, ordered_absolute_distances, k)
+        phi = self._compute_phi(c1, c2, ordered_absolute_distances, k)
         d_n = dist1[c2.label] / phi
         return d_r, d_n
 
     @staticmethod
-    def compute_phi(cluster1, cluster2, ordered_absolute_distances, k):
+    def _compute_phi(cluster1, cluster2, ordered_absolute_distances, k):
         data_indices = list()
         data_indices.extend(cluster1.members)
         data_indices.extend(cluster2.members)
@@ -224,7 +238,7 @@ class RankOrderClustering(BaseClustering):
         return sum_1 / (len(cluster1) + len(cluster2))
 
     @staticmethod
-    def calc_asym_dist(ind1, ind2, ol1, ol2):
+    def _calc_asym_dist(ind1, ind2, ol1, ol2):
         b_in_a = np.where(ol1 == ind2)[0][0]
         d = 0
         for i in range(b_in_a):
@@ -269,26 +283,27 @@ class ApproximateRankOrderClustering(BaseClustering):
         """
 
         n_samples = X.shape[0]
-        ordered_distances, order_lists = self.get_knns(X)
-        pairwise_distances = self.compute_pairwise_distances(ordered_distances,
-                                                             order_lists)
-        clusters = self.merge(pairwise_distances)
-        labels = np.zeros(n_samples)
+        ordered_distances, order_lists = self._get_knns(X, self.k, self.absolute_distance_metric)
+        pairwise_distances = self._compute_pairwise_distances(ordered_distances,
+                                                              order_lists)
+        clusters = self._merge(pairwise_distances)
+        labels = np.arange(n_samples)
         for i, c in enumerate(clusters):
             labels[c] = i
         return labels
 
-    def get_knns(self, X):
+    @staticmethod
+    def _get_knns(X, k, metric):
         """Generates order lists and absolute distances of k-nearest-neighbors
             for each data point.
         """
 
-        nbrs = NearestNeighbors(n_neighbors=self.k, algorithm='ball_tree',
-                                metric=self.absolute_distance_metric).fit(X)
+        nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree',
+                                metric=metric).fit(X)
         ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
         return ordered_absolute_distances, order_lists
 
-    def compute_pairwise_distances(self, ordered_distances, order_lists):
+    def _compute_pairwise_distances(self, ordered_distances, order_lists):
         """Returns a matrix of shape (n_samples, n_samples) of pw distances.
         Elements that do not share any neighbors will filled by 'np.Inf'.
         """
@@ -344,7 +359,7 @@ class ApproximateRankOrderClustering(BaseClustering):
                 pw_dist[j, i] = dist
         return pw_dist
 
-    def merge(self, pw_distances):
+    def _merge(self, pw_distances):
         """Transitively merge all pairs of samples with pw distances below self.threshold ."""
 
         indices = [i for i in range(pw_distances.shape[0])]
@@ -360,4 +375,4 @@ class ApproximateRankOrderClustering(BaseClustering):
                         indices.remove(i)
                         cluster.append(i)
             clusters.append(cluster)
-        return clusters
+        return np.array(clusters)
