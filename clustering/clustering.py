@@ -4,8 +4,8 @@
 This file contains classes that are implementations of two clustering algorithms
  proposed for face clustering problem.
 
-I combine Approximate Rank-Order algorithm and Chinese Whispers algorithm
- in ROCWClustering class.
+I have combined the Approximate-Rank-Order algorithm and the Chinese-Whispers algorithm
+ as ROCWClustering class.
 """
 # Author: Soroush Moazed <soroush.moazed@gmail.com>
 
