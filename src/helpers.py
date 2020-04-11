@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Helper classes for algorithms implemented in clustering.py
+"""Helper classes for algorithms implemented in src.py
 """
 # Author: Soroush Moazed <soroush.moazed@gmail.com>
 
@@ -131,12 +131,12 @@ class PrimaryRO:
         self.absolute_dist_metric = absolute_dist_metric
         self.threshold = threshold
 
-    def fit_predict(self, X):
-        n_samples = X.shape[0]
+    def fit_predict(self, x):
+        n_samples = x.shape[0]
         nbrs = NearestNeighbors(n_neighbors=n_samples,
                                 algorithm='ball_tree',
-                                metric=self.absolute_dist_metric).fit(X)
-        _, order_lists = nbrs.kneighbors(X)
+                                metric=self.absolute_dist_metric).fit(x)
+        _, order_lists = nbrs.kneighbors(x)
         ro_distances = self.calc_ro_distances(order_lists)
         clusters = self.do_clustering(ro_distances, self.threshold)
         labels = np.zeros(n_samples)
@@ -171,9 +171,10 @@ class PrimaryRO:
             clusters.append(cluster)
         return clusters
 
-    def calc_dr(self, ind1, ind2, ol1, ol2):
-        def calc_asym_dist(ind1, ind2, ol1, ol2):
-            b_in_a = np.where(ol1 == ind2)[0][0]
+    @staticmethod
+    def calc_dr(ind1, ind2, ol1, ol2):
+        def calc_asym_dist(ind, ol1, ol2):
+            b_in_a = np.where(ol1 == ind)[0][0]
             d = 0
             for i in range(b_in_a):
                 f = ol1[i]
@@ -181,8 +182,8 @@ class PrimaryRO:
                 d += o
             return b_in_a, d
 
-        o_a_b, d_1 = calc_asym_dist(ind1, ind2, ol1, ol2)
-        o_b_a, d_2 = calc_asym_dist(ind2, ind1, ol2, ol1)
+        o_a_b, d_1 = calc_asym_dist(ind2, ol1, ol2)
+        o_b_a, d_2 = calc_asym_dist(ind1, ol2, ol1)
         d_r = (d_1 + d_2) / min(o_a_b, o_b_a)
         return d_r
 
@@ -234,19 +235,19 @@ class ROGraph:
     def adjacency_mat(self):
         return self.adjacency_mat_
 
-    def generate_graph(self, X):
-        ordered_distances, order_lists = self._get_knns(X)
+    def generate_graph(self, x):
+        ordered_distances, order_lists = self._get_knns(x)
         pw_distances = self._generate_normalized_pw_distances(ordered_distances, order_lists)
         adjacency_mat = self._generate_adjacency_mat(pw_distances)
         return adjacency_mat
 
-    def _get_knns(self, X):
+    def _get_knns(self, x):
         """Generates order lists and absolute distances of k-nearest-neighbors
             for each data point.
         """
 
-        nbrs = NearestNeighbors(n_neighbors=self.k, algorithm=self.knn_algorithm, metric=self.metric).fit(X)
-        ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
+        nbrs = NearestNeighbors(n_neighbors=self.k, algorithm=self.knn_algorithm, metric=self.metric).fit(x)
+        ordered_absolute_distances, order_lists = nbrs.kneighbors(x)
         return ordered_absolute_distances, order_lists
 
     def _generate_normalized_pw_distances(self, ordered_distances, order_lists):
@@ -255,9 +256,9 @@ class ROGraph:
         pw_distances = np.zeros((n_samples, n_samples))
         for ind1, ind2 in combs:
             order_list_1, order_list_2 = order_lists[ind1], order_lists[ind2]
-            pw_dist = self._calc_pw_dist(ind1, ind2, order_list_1, order_list_2, ordered_distances)
+            pw_dist = self._calc_pw_dist(ind1, ind2, order_list_1, order_list_2)
             pw_distances[ind1, ind2] = pw_dist
-        pw_distances = pw_distances / pw_distances.max()
+        pw_distances = pw_distances / np.max(pw_distances)
         pw_distances = pw_distances + pw_distances.T
         return pw_distances
 
@@ -273,12 +274,12 @@ class ROGraph:
         adjacency_mat = (1 - distances) * mask_mat
         return adjacency_mat
 
-    def _calc_pw_dist(self, ind_a, ind_b, order_list_a, order_list_b, ordered_distances):
+    def _calc_pw_dist(self, ind_a, ind_b, order_list_a, order_list_b):
         pw_dist = 0.0
         if np.any(order_list_a == order_list_b):
             order_b_in_a, order_a_in_b = self._calc_orders(ind_a, ind_b, order_list_a, order_list_b)
-            d_m_ab = self._calc_dm(ind_a, ind_b, order_list_a, order_list_b, order_b_in_a, order_a_in_b)
-            d_m_ba = self._calc_dm(ind_b, ind_a, order_list_b, order_list_a, order_a_in_b, order_b_in_a)
+            d_m_ab = self._calc_dm(order_list_a, order_list_b, order_b_in_a)
+            d_m_ba = self._calc_dm(order_list_b, order_list_a, order_a_in_b)
             pw_dist = (d_m_ab + d_m_ba) / min(order_a_in_b, order_b_in_a)
         return pw_dist
 
@@ -296,8 +297,9 @@ class ROGraph:
         return order_b_in_a, order_a_in_b
 
     def _calc_dm(self,
-                 ind_a, ind_b, order_list_a, order_list_b,
-                 order_b_in_a, ordered_distances):
+                 order_list_a,
+                 order_list_b,
+                 order_b_in_a):
         dist = 0
         for i in range(min(self.k, order_b_in_a)):
             sample_index = order_list_a[i]
