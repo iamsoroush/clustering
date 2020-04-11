@@ -20,7 +20,7 @@ Here are the source papers:
 # How to use?
 It is just as simple as instantiating a clustering algorithm, and calling its `fit_predict` method on provided data, just like the scikit-learn estimators.
 
-See [this notebook](https://github.com/iamsoroush/clustering/blob/master/examples.ipynb) for some simple usage examples.
+See [this notebook](https://github.com/iamsoroush/clustering/blob/master/notebook.ipynb) for some simple usage examples.
 
 
 # Results
