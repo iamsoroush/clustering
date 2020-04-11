@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Randk-Order-Based clustering algorithm.
+"""Randk-Order-Based src algorithm.
 
-This file contains classes that are implementations of two clustering algorithms
- proposed for face clustering problem.
+This file contains classes that are implementations of two src algorithms
+ proposed for face src problem.
 
 I have combined the Approximate-Rank-Order algorithm and the Chinese-Whispers algorithm
  as ROCWClustering class.
@@ -18,18 +18,19 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import pairwise_distances
 
-from helpers import Cluster, ClusterContainer, ChineseWhispersClustering, ROGraph
+from .helpers import Cluster, ClusterContainer, ChineseWhispersClustering, ROGraph
 
 
 class BaseClustering:
+
     def __init__(self):
         pass
 
-    def fit_predict(self, X):
+    def fit_predict(self, x):
         pass
 
-    def score(self, X, y_true):
-        y_pred = self.fit_predict(X)
+    def score(self, x, y_true):
+        y_pred = self.fit_predict(x)
         pairwise_precision = self._calc_pw_precision(y_pred, y_true)
         pairwise_recall = self._calc_pw_recall(y_pred, y_true)
         pairwise_f_measure = 2 * (pairwise_precision * pairwise_recall)\
@@ -71,30 +72,102 @@ class BaseClustering:
         return pw_recall
 
 
+class ChineseWhispers(BaseClustering):
+
+    """Implementation of chinese whispers clustering algorithm.
+    Source paper: https://pdfs.semanticscholar.org/c64b/9ed6a42b93a24316c7d1d6b\
+                  3fddbd96dbaf5.pdf?_ga=2.16343989.248353595.1538147473-1437352660.1538147473
+
+     Attributes
+        ----------
+        labels_: Input data clusters will save in this attribute,
+            after calling fit_predict method. This attribute
+            will be a vector of shape X.shape[0] .
+        adjacency_mat_: Contains pair-wise similarity measure of input data.
+            Similarity measure is: 1/euclidean_distance.
+    """
+
+    def __init__(self, n_iteration=10, metric='euclidean'):
+
+        """Init an estimator object.
+        Parameters
+        ----------
+        n_iteration: int
+            Number of iterations.
+        metric: str
+            String indicating metric to use in calculating distances between samples.
+            For available metrics refer to:
+             http://scikit-learn.org/0.18/modules/generated/sklearn.metrics.pairwise.pairwise_distances.html
+        """
+
+        super().__init__()
+        self.n_iteration = n_iteration
+        self.metric = metric
+        self.labels_ = None
+        self.adjacency_mat_ = None
+
+    def fit_predict(self, x, y=None):
+
+        """Fits the estimator on X, and returns the labels of X as predictions.
+        Parameters
+        ----------
+        x: :obj: np.ndarray with ndim=2
+            This is the input array, rows represent data points while cols are data features.
+        y: associated labels. leave it as None.
+
+        :return self.labels_
+        """
+
+        assert isinstance(self.n_iteration, int), "parameter n_iterations must be of type int"
+        assert isinstance(x, np.ndarray), "X must be an instance of np.ndarray"
+        assert x.ndim == 2, "X must be of ndim=2"
+
+        graph_clustering = ChineseWhispersClustering(n_iteration=self.n_iteration)
+        adjacency_mat = self._generate_adjacency_mat(x)
+        labels = graph_clustering.fit_predict(adjacency_mat)
+        self.adjacency_mat_ = adjacency_mat
+        self.labels_ = labels
+        return labels
+
+    def _generate_adjacency_mat(self, x):
+        n_samples = x.shape[0]
+        distances_mat = pairwise_distances(x, metric=self.metric)
+        adjacency_mat = (1 / (distances_mat + np.identity(n_samples, dtype=x.dtype))) * \
+                        (np.ones((n_samples, n_samples), dtype=x.dtype) -
+                         np.identity(n_samples, dtype=x.dtype))
+        return adjacency_mat
+
+    def score(self, x, y):
+        pass
+
+
 class ROCWClustering(BaseClustering):
-    """Approximated rank-order clustering implemented using Chinese Whispers algorithm.
+
+    """Approximated rank-order src implemented using Chinese Whispers algorithm.
 
     Using rank-order distances generate a graph, and feed this graph to ChineseWhispers
-     algorithm for clustering.
+     algorithm for src.
 
     """
 
     def __init__(self, k=20, metric='euclidean', n_iteration=5, algorithm='ball_tree'):
+        super().__init__()
         self.k = k
         self.metric = metric
         self.n_iteration = n_iteration
         self.knn_algorithm = algorithm
 
-    def fit_predict(self, X):
+    def fit_predict(self, x):
         graph = ROGraph(self.k, self.metric, algorithm=self.knn_algorithm)
-        adjacency_mat = graph.generate_graph(X)
+        adjacency_mat = graph.generate_graph(x)
         clusterer = ChineseWhispersClustering(self.n_iteration)
         labels = clusterer.fit_predict(adjacency_mat)
         return labels
 
 
 class RankOrderClustering(BaseClustering):
-    """Class for rank-order clustering algorithm.
+
+    """Class for rank-order src algorithm.
 
     Source paper:  DOI: 10.1109/CVPR.2011.5995680
 
@@ -102,27 +175,29 @@ class RankOrderClustering(BaseClustering):
     """
 
     def __init__(self, metric='euclidean', threshold=10, k=20):
+        super().__init__()
         self.ranking_metric = metric
         self.threshold = threshold
         self.k = k
 
-    def fit_predict(self, X):
+    def fit_predict(self, x):
+
         """Finds clusters and returns founded labels.
 
         Parameters
         ----------
-        X: :obj: np.ndarray
+        x: :obj: np.ndarray
             An array of data samples.
 
-        returns: An array containing predicted label for each data point.
+        :returns An array containing predicted label for each data point.
         """
 
-        n_samples = X.shape[0]
+        n_samples = x.shape[0]
 
         # Generate order list for every data point
-        ordered_absolute_distances, sample_level_order_lists = self._get_knns(X, n_samples,
+        ordered_absolute_distances, sample_level_order_lists = self._get_knns(x, n_samples,
                                                                               self.ranking_metric)
-        absolute_distances = pairwise_distances(X, metric=self.ranking_metric)
+        absolute_distances = pairwise_distances(x, metric=self.ranking_metric)
 
         # Initialize clusters, each data point will be a separate cluster
         cluster_list = [Cluster(label=i, members=[i]) for i in range(n_samples)]
@@ -130,7 +205,7 @@ class RankOrderClustering(BaseClustering):
                                     absolute_distances=absolute_distances,
                                     sample_level_order_lists=sample_level_order_lists)
 
-        # Do rank-order clustering
+        # Do rank-order src
         while True:
 
             # Create every possible pair of clusters, based on indices in "clusters" object
@@ -170,17 +245,19 @@ class RankOrderClustering(BaseClustering):
         return labels
 
     @staticmethod
-    def _get_knns(X, k, metric):
+    def _get_knns(x, k, metric):
+
         """Generates order lists and absolute distances of k-nearest-neighbors
             for each data point.
         """
 
         nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree',
-                                metric=metric).fit(X)
-        ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
+                                metric=metric).fit(x)
+        ordered_absolute_distances, order_lists = nbrs.kneighbors(x)
         return ordered_absolute_distances, order_lists
 
-    def _find_clusters_to_merge(self, candidate_pairs):
+    @staticmethod
+    def _find_clusters_to_merge(candidate_pairs):
         clusters_to_merge = []
         pairs = candidate_pairs.copy()
         while pairs:
@@ -205,30 +282,28 @@ class RankOrderClustering(BaseClustering):
         return clusters_to_merge
 
     def _calc_dr_dn(self, c1, c2, dist1, dist2, ordered_absolute_distances, k):
+
         """Calculate two distance metrics in cluster-level.
 
         Parameters
         ----------
         c1 : :obj: Cluster
         c2 : :obj: Cluster
-        ol1 : :obj: np.ndarray
-        ol2 : :obj: np.ndarray
-        absolute_distances : :obj: np.ndarray . array of arrays.
         k : int
         """
 
         ol1 = np.argsort(dist1)
         ol2 = np.argsort(dist2)
-        o1, d1 = self._calc_asym_dist(c1.label, c2.label, ol1, ol2)
-        o2, d2 = self._calc_asym_dist(c2.label, c1.label, ol2, ol1)
+        o1, d1 = self._calc_asym_dist(c2.label, ol1, ol2)
+        o2, d2 = self._calc_asym_dist(c1.label, ol2, ol1)
         d_r = (d1 + d2) / min(o1, o2)
 
-        phi = self._compute_phi(c1, c2, ordered_absolute_distances, k)
+        phi = self._get_phi(c1, c2, ordered_absolute_distances, k)
         d_n = dist1[c2.label] / phi
         return d_r, d_n
 
     @staticmethod
-    def _compute_phi(cluster1, cluster2, ordered_absolute_distances, k):
+    def _get_phi(cluster1, cluster2, ordered_absolute_distances, k):
         data_indices = list()
         data_indices.extend(cluster1.members)
         data_indices.extend(cluster2.members)
@@ -238,7 +313,7 @@ class RankOrderClustering(BaseClustering):
         return sum_1 / (len(cluster1) + len(cluster2))
 
     @staticmethod
-    def _calc_asym_dist(ind1, ind2, ol1, ol2):
+    def _calc_asym_dist(ind2, ol1, ol2):
         b_in_a = np.where(ol1 == ind2)[0][0]
         d = 0
         for i in range(b_in_a):
@@ -249,12 +324,14 @@ class RankOrderClustering(BaseClustering):
 
 
 class ApproximateRankOrderClustering(BaseClustering):
-    """Approximate rank-order clustering implementation.
+
+    """Approximate rank-order src implementation.
 
     Source paper: https://arxiv.org/abs/1604.00989
     """
 
     def __init__(self, k=50, threshold=0.1, metric='euclidean'):
+
         """Init an instance.
 
         Parameters
@@ -264,58 +341,62 @@ class ApproximateRankOrderClustering(BaseClustering):
         threshold : A parameter for merging clusters. All pairs of clusters
          with distances below this threshold will merge transitively.
 
-        absolute_distance_metric : Distance metric to pass to NearestNeighbors estimator .
+        metric: Distance metric to pass to NearestNeighbors estimator .
         """
 
+        super().__init__()
         self.k = k
         self.threshold = threshold
         self.absolute_distance_metric = metric
 
-    def fit_predict(self, X):
+    def fit_predict(self, x):
+
         """Finds clusters within given data and returns predicted labels.
 
         Parameters
         ----------
-        X: array of np.ndarray objects. i.e. features extracted for given faces using
+        x: array of np.ndarray objects. i.e. features extracted for given faces using
             facenet architecture.
 
-        returns: labels for input samples, indicating corresponding clusters.
+        :returns labels for input samples, indicating corresponding clusters.
         """
 
-        n_samples = X.shape[0]
-        ordered_distances, order_lists = self._get_knns(X, self.k, self.absolute_distance_metric)
-        pairwise_distances = self._compute_pairwise_distances(ordered_distances,
-                                                              order_lists)
-        clusters = self._merge(pairwise_distances)
+        n_samples = x.shape[0]
+        ordered_distances, order_lists = self._get_knns(x, self.k, self.absolute_distance_metric)
+        pw_distances = self._calc_pairwise_distances(order_lists)
+        clusters = self._merge(pw_distances)
         labels = np.arange(n_samples)
         for i, c in enumerate(clusters):
             labels[c] = i
         return labels
 
     @staticmethod
-    def _get_knns(X, k, metric):
+    def _get_knns(x, k, metric):
+
         """Generates order lists and absolute distances of k-nearest-neighbors
             for each data point.
         """
 
         nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree',
-                                metric=metric).fit(X)
-        ordered_absolute_distances, order_lists = nbrs.kneighbors(X)
+                                metric=metric).fit(x)
+        ordered_absolute_distances, order_lists = nbrs.kneighbors(x)
         return ordered_absolute_distances, order_lists
 
-    def _compute_pairwise_distances(self, ordered_distances, order_lists):
+    def _calc_pairwise_distances(self, order_lists):
+
         """Returns a matrix of shape (n_samples, n_samples) of pw distances.
         Elements that do not share any neighbors will filled by 'np.Inf'.
         """
 
-        distance_measures = self._compute_distance_measures(order_lists, self.k)
-        pairwise_distances = self._compute_pw_dist(distance_measures, order_lists)
+        distance_measures = self._calc_distance_measures(order_lists)
+        pw_ditances = self._calc_pw_dist(distance_measures, order_lists)
         self.dist_measures = distance_measures
-        self.pw_dist = pairwise_distances
-        return pairwise_distances
+        self.pw_dist = pw_ditances
+        return pw_ditances
 
     @staticmethod
-    def _compute_distance_measures(order_lists, k):
+    def _calc_distance_measures(order_lists):
+
         """Returns a matrix of shape (n_samples, n_samples) with each element
             representing i-to-j distance.
         """
@@ -335,7 +416,7 @@ class ApproximateRankOrderClustering(BaseClustering):
         return distance_measures
 
     @staticmethod
-    def _compute_pw_dist(dist_measures, order_lists):
+    def _calc_pw_dist(dist_measures, order_lists):
         n_samples = len(order_lists)
         pw_dist = np.ones((n_samples, n_samples)) * np.Inf
         np.fill_diagonal(pw_dist, 0)
@@ -344,7 +425,6 @@ class ApproximateRankOrderClustering(BaseClustering):
             if np.any(order_lists[i] == j) or np.any(order_lists[j] == i):
                 o_i = np.where(order_lists[i] == j)[0]
                 o_j = np.where(order_lists[j] == i)[0]
-                denom = 0
                 if o_i.size:
                     if o_j.size:
                         denom = min(o_i[0], o_j[0])
@@ -360,6 +440,7 @@ class ApproximateRankOrderClustering(BaseClustering):
         return pw_dist
 
     def _merge(self, pw_distances):
+
         """Transitively merge all pairs of samples with pw distances below self.threshold ."""
 
         indices = [i for i in range(pw_distances.shape[0])]
